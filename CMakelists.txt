@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
 project(myrenderer)
+
 set(CMAKE_CXX_STANDARD 17)
-add_executable(myrenderer main.cpp, tgaimage.cpp,tgaimage.h)
+
+
+add_executable(myrenderer main.cpp tgaimage.cpp)
+
+
+target_include_directories(myrenderer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
