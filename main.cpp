@@ -1,8 +1,11 @@
 #include <iostream>
 #include <cstring>
 #include<chrono>
+#include "model.hpp"
 #include "tgaimage.hpp"
 
+constexpr int width  = 800;
+constexpr int height = 800;
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
@@ -34,10 +37,13 @@ void line(int ax,int ay,int bx, int by, TGAImage &framebuffer, TGAColor color){
    }
 
 }
+std::tuple<int,int> project(vec3 v) { // First of all, (x,y) is an orthogonal projection of the vector (x,y,z).
+    return { (v.x + 1.) * width/2,   // Second, since the input models are scaled to have fit in the [-1,1]^3 world coordinates,
+             (v.y + 1.) * height/2 }; // we want to shift the vector (x,y) and then scale it to span the entire screen.
+}
 
 int main(int argc, char** argv){
-    constexpr int width  = 64;
-    constexpr int height = 64;
+    
     TGAImage framebuffer(width, height, TGAImage::RGB);
 
     // int ax =  7, ay =  3;
@@ -52,16 +58,33 @@ int main(int argc, char** argv){
     // framebuffer.set(ax, ay, white);
     // framebuffer.set(bx, by, white);
     // framebuffer.set(cx, cy, white);
-     auto start = std::chrono::high_resolution_clock::now();
-     std::srand(std::time({}));
-    for (int i=0; i<(1<<24); i++) {
-        int ax = rand()%width, ay = rand()%height;
-        int bx = rand()%width, by = rand()%height;
-        line(ax, ay, bx, by, framebuffer, { static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255) });
+    //  auto start = std::chrono::high_resolution_clock::now();
+    //  std::srand(std::time({}));
+    // for (int i=0; i<(1<<24); i++) {
+    //     int ax = rand()%width, ay = rand()%height;
+    //     int bx = rand()%width, by = rand()%height;
+    //     line(ax, ay, bx, by, framebuffer, { static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255), static_cast<unsigned char>(rand()%255) });
+    // }
+    // auto end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> diff = end - start;
+    // std::cout << "Time taken: " << diff.count() << " s\n";
+    model m("/Users/nasu/Documents/cpp_project/myrenderer/obj/boggie/body.obj");
+    for(int i=0;i<m.nfaces();i++){
+        auto [ax, ay] = project(m.vert(i, 0));
+        auto [bx, by] = project(m.vert(i, 1));
+        auto [cx, cy] = project(m.vert(i, 2));
+
+        line(ax, ay, bx, by, framebuffer, white);
+        line(bx, by, cx, cy, framebuffer, white);
+        line(cx, cy, ax, ay, framebuffer, white);
+       
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end - start;
-    std::cout << "Time taken: " << diff.count() << " s\n";
+     for (int i=0; i<m.nverts(); i++) { // iterate through all vertices
+        vec3 v = m.vert(i);            // get i-th vertex
+        auto [x, y] = project(v);          // project it to the screen
+        framebuffer.set(x, y, white);
+    }
+
     
     
     framebuffer.write_tga_file("framebuffer.tga");
