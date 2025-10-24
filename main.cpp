@@ -1,15 +1,17 @@
 #include <iostream>
 #include <cstring>
 #include<chrono>
+#include <cmath>
 #include "model.hpp"
 #include "tgaimage.hpp"
-const int width  = 800;
-const int height = 800;
+const int width  = 1500;
+const int height = 1500;
 constexpr TGAColor white   = {255, 255, 255, 255}; // attention, BGRA order
 constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
+
 
 double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) { //计算有向面积
     return .5*((by-ay)*(bx+ax) + (cy-by)*(cx+bx) + (ay-cy)*(ax+cx));
@@ -144,12 +146,17 @@ void triangle_3D(int ax, int ay, int az, int bx, int by, int bz, int cx, int cy,
         }
     }
 }
+double norm(vec3 v) {
+    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
 std::tuple<int,int,int> project(vec3 v){ //投影到屏幕空间
     int x= (v.x +1.)*width/2.;
     int y= (v.y +1.)*height/2.;
     int z= (v.z +1.)*255/2.;
     return {x,y,z};
 }
+
 
 int main(){
     //线框图
@@ -194,11 +201,14 @@ int main(){
 
 // 深度缓冲三角形
     model model("/Users/nasu/Documents/cpp_project/myrenderer/obj/diablo3_pose/diablo3_pose.obj");
+
     for(int i=0;i<model.nfaces();i++){ //遍历每个面
+
         //获取每个面的三个顶点
         vec3 v0= model.vert(i,0);
         vec3 v1= model.vert(i,1);
         vec3 v2= model.vert(i,2);
+        
         //投影到屏幕空间
         auto [x0,y0,z0]= project(v0);
         auto [x1,y1,z1]= project(v1);
