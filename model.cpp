@@ -90,7 +90,7 @@ model::model(const char* filename){
             faces_.push_back(f);
         }
     }
-    NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
+    //NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
     std::cerr<< "# v# " <<verts_.size() << " f# "<< faces_.size() << std::endl;
 }
 
