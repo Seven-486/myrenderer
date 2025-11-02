@@ -80,17 +80,28 @@ model::model(const char* filename){
             }
             verts_.push_back(v);
         }else if(!line.compare(0,2,"f ")){ // line starts with "f "
-            std::vector<int> f; 
-            int itrash,n; 
+            std::vector<FaceVertex> f; 
+            int texture_index, normal_index,vertex_index; 
             iss>>trash;// skip the "f" character
-            while(iss>>n>>trash>>itrash>>trash>>itrash){ //trash是一个临时变量，用来读取斜杠,itrash是用来读取被忽略的值,空格分隔则是自动跳过
-                n--; //  assume the obj file starts counting from 1 
-                f.push_back(n);
-            }
+            while(iss>>vertex_index>>trash>>texture_index>>trash>>normal_index){ //trash是一个临时变量，用来读取斜杠,itrash是用来读取被忽略的值,空格分隔则是自动跳过
+                vertex_index--; //  assume the obj file starts counting from 1 
+                texture_index--;
+                normal_index--;
+                f.push_back({vertex_index, texture_index, normal_index});
+            };
             faces_.push_back(f);
+
+        }else if (!line.compare(0,3,"vn ")){ // line starts with "vn "
+
+            iss>>trash>>trash; // skip the "vn" characters
+            vec<3> n;
+            for(int i=0;i<3;i++){
+                iss>>n[i];  
+            }
+            normals_.push_back(n);
         }
     }
-    //NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
+    NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
     std::cerr<< "# v# " <<verts_.size() << " f# "<< faces_.size() << std::endl;
 }
 
@@ -107,5 +118,10 @@ vec<3> model::vert(int i)const {
 }
 
 vec3 model::vert(const int iface, const int nthvert) const {
-    return verts_[faces_[iface][nthvert]];
+    return verts_[faces_[iface][nthvert].vert_idx];
+}
+
+vec3 model::normal(const int iface, const int nthvert) const
+{
+    return normals_[faces_[iface][nthvert].norm_idx];
 }

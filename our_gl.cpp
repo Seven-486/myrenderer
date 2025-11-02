@@ -42,8 +42,8 @@ void init_zbuffer(const int width, const int height) {
     std::fill(zbuffer.begin(), zbuffer.end(), -std::numeric_limits<double>::max());
 }
 
-void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer){
-       vec4 ndc[3]    = { clip[0]/clip[0].w, clip[1]/clip[1].w, clip[2]/clip[2].w };                // normalized device coordinates
+void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer) {
+    vec4 ndc[3]    = { clip[0]/clip[0].w, clip[1]/clip[1].w, clip[2]/clip[2].w };                // normalized device coordinates
     vec2 screen[3] = { (Viewport*ndc[0]).xy(), (Viewport*ndc[1]).xy(), (Viewport*ndc[2]).xy() }; // screen coordinates
 
     mat<3,3> ABC = {{ {screen[0].x, screen[0].y, 1.}, {screen[1].x, screen[1].y, 1.}, {screen[2].x, screen[2].y, 1.} }};
@@ -64,5 +64,4 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
             framebuffer.set(x, y, color);                          // update the framebuffer
         }
     }
-
 }
