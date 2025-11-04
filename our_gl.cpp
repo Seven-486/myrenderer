@@ -26,7 +26,7 @@ void lookat(const vec3 eye, const vec3 center, const vec3 up) {
     vec3 l = normalized(cross(up,n));
     vec3 m = normalized(cross(n, l));
     ModelView = mat<4,4>{{{l.x,l.y,l.z,0}, {m.x,m.y,m.z,0}, {n.x,n.y,n.z,0}, {0,0,0,1}}} *
-                mat<4,4>{{{1,0,0,-center.x}, {0,1,0,-center.y}, {0,0,1,-center.z}, {0,0,0,1}}};
+                mat<4,4>{{{1,0,0,-center.x}, {0,1,0,-center.y}, {0,0,1,-center.z}, {0,0,0,1}}}; //moderview矩阵是mvp变换的view部分
 }
 
 void init_perspective_simple(const double f) {
@@ -34,7 +34,7 @@ void init_perspective_simple(const double f) {
 }
 
 void init_viewport(const int x, const int y, const int w, const int h) {
-    Viewport = {{{w/2., 0, 0, x+w/2.}, {0, h/2., 0, y+h/2.}, {0,0,1,0}, {0,0,0,1}}};
+    Viewport = {{{w/2., 0, 0, x+w/2.}, {0, h/2., 0, y+h/2.}, {0,0,1,0}, {0,0,0,1}}};    //viewport矩阵是mvp变换的最后一步，将ndc坐标映射到屏幕坐标
 }
 
 void init_zbuffer(const int width, const int height) {

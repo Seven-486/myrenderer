@@ -100,6 +100,15 @@ model::model(const char* filename){
             }
             normals_.push_back(n);
         }
+        else if (!line.compare(0,3,"vt ")){ // line starts with "vt "
+
+            iss>>trash>>trash; // skip the "vt" characters
+            vec<2> tc;
+            for(int i=0;i<2;i++){
+                iss>>tc[i];  
+            }
+            texcoords_.push_back({tc.x,1-tc.y});
+        }
     }
     NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
     std::cerr<< "# v# " <<verts_.size() << " f# "<< faces_.size() << std::endl;
@@ -124,4 +133,15 @@ vec3 model::vert(const int iface, const int nthvert) const {
 vec3 model::normal(const int iface, const int nthvert) const
 {
     return normals_[faces_[iface][nthvert].norm_idx];
+}
+
+// vec4 model::normal(const vec2 &uv) const
+// {
+//     //TGAColor c = normalmap.get(uv[0]*normalmap.width(), uv[1]*normalmap.height());
+//     //return vec4{(double)c[2],(double)c[1],(double)c[0],0}*2./255. - vec4{1,1,1,0};
+// }
+
+vec2 model::tex(const int iface, const int nthvert) const
+{
+   return  texcoords_[faces_[iface][nthvert].tex_idx];
 }
