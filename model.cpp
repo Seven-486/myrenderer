@@ -3,6 +3,7 @@
 #include<sstream>
 #include<string>
 #include<iostream>
+#include<iomanip>
 struct BoundingBox { double minX, minY, minZ, maxX, maxY, maxZ; };
 // 计算包围盒
 BoundingBox CalculateBoundingBox(const std::vector<vec3>& vertices) {
@@ -75,10 +76,19 @@ model::model(const char* filename){
             
             iss>>trash; // skip the "v" character
             vec<3> v;
-            for(int i=0;i<3;i++){
-                iss>>v[i];  
+            for(int i=0;i<3;){  
+                iss>>v[i]; 
+                if(v[i]=='-') { // handle negative numbers
+                    iss>>v[i];
+                    v[i] = -v[i];
+                }
+                i++;
             }
             verts_.push_back(v);
+            for(int i:{0,1,2}){
+                std::cerr<<std::right<<std::setw(2)<<v[i]<<" ";
+            }
+            std::cerr<<std::endl;
         }else if(!line.compare(0,2,"f ")){ // line starts with "f "
             std::vector<FaceVertex> f; 
             int texture_index, normal_index,vertex_index; 
@@ -110,7 +120,7 @@ model::model(const char* filename){
             texcoords_.push_back({tc.x,1-tc.y});
         }
     }
-    NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
+    //NormalizeToCenteredCube(verts_, true); // 归一化顶点坐标，保持长宽高比例
     std::cerr<< "# v# " <<verts_.size() << " f# "<< faces_.size() << std::endl;
 }
 
