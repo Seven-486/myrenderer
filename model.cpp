@@ -85,10 +85,7 @@ model::model(const char* filename){
                 i++;
             }
             verts_.push_back(v);
-            for(int i:{0,1,2}){
-                std::cerr<<std::right<<std::setw(2)<<v[i]<<" ";
-            }
-            std::cerr<<std::endl;
+            
         }else if(!line.compare(0,2,"f ")){ // line starts with "f "
             std::vector<FaceVertex> f; 
             int texture_index, normal_index,vertex_index; 
@@ -124,6 +121,31 @@ model::model(const char* filename){
     std::cerr<< "# v# " <<verts_.size() << " f# "<< faces_.size() << std::endl;
 }
 
+const TGAImage& model::get_texture_color() const {
+    return texture_color;
+}
+const TGAImage& model::get_texture_normal() const {
+    return texture_normal;
+}
+const TGAImage& model::get_texture_spec() const {
+    return texture_spec;
+}
+
+void model::read_texture(const char *filename)
+{
+    texture_color.read_tga_file(filename);
+}
+
+void model::read_specmap(const char *filename)
+{
+    texture_spec.read_tga_file(filename);
+}
+
+void model::read_normalmap(const char *filename)
+{
+    texture_normal.read_tga_file(filename);
+}
+
 int model::nverts()const{
     return verts_.size();
 }
@@ -143,6 +165,11 @@ vec3 model::vert(const int iface, const int nthvert) const {
 vec3 model::normal(const int iface, const int nthvert) const
 {
     return normals_[faces_[iface][nthvert].norm_idx];
+}
+
+vec4 model::normal(const vec2 &uv) const
+{
+    return vec4();
 }
 
 // vec4 model::normal(const vec2 &uv) const

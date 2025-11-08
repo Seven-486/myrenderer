@@ -3,6 +3,7 @@
 
 inline mat<4,4> ModelView, Viewport, Perspective,Modeltransform; // "OpenGL" state matrices
 inline std::vector<double> zbuffer;               // depth buffer
+inline std::vector<double> shadowbuffer;               // depth buffer for shadow map from light source
 
 void init_modeltransform(double scale_factor, vec3 translate_vector, vec3 rotate_vector){
     Modeltransform = {{{scale_factor,0,0,translate_vector.x}, //功能是缩放和平移
@@ -40,6 +41,12 @@ void init_viewport(const int x, const int y, const int w, const int h) {
 void init_zbuffer(const int width, const int height) {
     zbuffer.resize(width * height);
     std::fill(zbuffer.begin(), zbuffer.end(), -std::numeric_limits<double>::max());
+}
+
+void init_shadowbuffer(const int width, const int height)
+{
+    shadowbuffer.resize(width * height);
+    std::fill(shadowbuffer.begin(), shadowbuffer.end(), -std::numeric_limits<double>::max());
 }
 
 void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffer) {
