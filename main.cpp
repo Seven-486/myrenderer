@@ -4,7 +4,7 @@
 #include<random>
 #include<cmath>
 
-// Smoothstep function implementation
+
 double smoothstep(double edge0, double edge1, double x) {
     double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0); //作用是将值限制在0到1之间
     return t * t * (3.0 - 2.0 * t); // 插值计算
@@ -91,7 +91,7 @@ struct PhongShader : IShader{
         int tex_width = texture.width();
         int tex_height = texture.height();
         
-        // ✅ 钳制UV坐标
+        // 钳制UV坐标
         double u_clamped = std::clamp(uv.x, 0.0, 0.999999);
         double v_clamped = std::clamp(uv.y, 0.0, 0.999999);
         
@@ -234,7 +234,7 @@ int main(){
            for(int k=0;k<3;k++){
                clip[k] = p_shader.vertex(j,k);
            }
-           rasterize_msaa4x(clip,p_shader,framebuffer);
+           rasterize(clip,p_shader,framebuffer);
        }
    }
    
@@ -376,7 +376,7 @@ int main(){
     }
 
 
-    //接下来实现ssao的部分
+    //ssao的部分
     std::vector<double> final_mask_ssao(width*height,0); //保存最终的SSAO遮罩 
     constexpr int m=120; //采样次数
     const double radius=0.1; //采样半径
