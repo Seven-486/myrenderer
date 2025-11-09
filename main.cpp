@@ -211,10 +211,6 @@ int main(){
     init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
     init_zbuffer(width, height);
     TGAImage framebuffer(width, height, TGAImage::RGB,{177, 195, 209, 255});
-    // texture_normal.read_tga_file("../obj/floor_nm_tangent.tga");
-    // texture_color.read_tga_file("../obj/floor_diffuse.tga");
-    // texture_spec.read_tga_file("../obj/floor_spec.tga");
-    // model Model("../obj/floor.obj");
     Scene scene(800,800);
     model Model1("../obj/diablo3_pose/diablo3_pose.obj");
     Model1.read_normalmap("../obj/diablo3_pose/diablo3_pose_nm_tangent.tga");
