@@ -1,6 +1,14 @@
 #include <cstdlib>
 #include "our_gl.hpp"
 #include "Scene.hpp"
+#include<random>
+#include<cmath>
+
+// Smoothstep function implementation
+double smoothstep(double edge0, double edge1, double x) {
+    double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0); //作用是将值限制在0到1之间
+    return t * t * (3.0 - 2.0 * t); // 插值计算
+}
 
 extern mat<4,4> Viewport,ModelView, Perspective,Modeltransform; // "OpenGL" state matrices and
 extern std::vector<double> zbuffer;     // the depth buffer
@@ -78,7 +86,50 @@ struct PhongShader : IShader{
         mat<4,4> D = { normalized(T[0]), normalized(T[1]),interpolated_normal, {0,0,0,1} };
 
         vec2 uv = (uv_persp[0]*bar.x + uv_persp[1]*bar.y + uv_persp[2]*bar.z)*w_interp; 
-        TGAColor diffuse_color= Model.get_texture_color().get(uv.x * Model.get_texture_color().width(), uv.y * Model.get_texture_color().height());
+        //以下进行双线性插值采样纹理颜色
+        auto bilinear_sample = [](const TGAImage& texture, vec2 uv) -> TGAColor {
+        int tex_width = texture.width();
+        int tex_height = texture.height();
+        
+        // ✅ 钳制UV坐标
+        double u_clamped = std::clamp(uv.x, 0.0, 0.999999);
+        double v_clamped = std::clamp(uv.y, 0.0, 0.999999);
+        
+        // 计算像素坐标
+        double u_float = u_clamped * tex_width;
+        double v_float = v_clamped * tex_height;
+        
+        int u0 = static_cast<int>(u_float);
+        int v0 = static_cast<int>(v_float);
+        int u1 = std::min(u0 + 1, tex_width - 1);
+        int v1 = std::min(v0 + 1, tex_height - 1);
+        
+        // 插值权重
+        double s = u_float - u0;
+        double t = v_float - v0;
+        
+        // 获取四个角的颜色
+        TGAColor c00 = texture.get(u0, v0);
+        TGAColor c10 = texture.get(u1, v0);
+        TGAColor c01 = texture.get(u0, v1);
+        TGAColor c11 = texture.get(u1, v1);
+        
+        // 双线性插值
+        TGAColor result;
+        for(int channel : {0, 1, 2, 3}) {
+            result[channel] = static_cast<std::uint8_t>(
+                (1 - s) * (1 - t) * c00[channel] +
+                s * (1 - t) * c10[channel] +
+                (1 - s) * t * c01[channel] +
+                s * t * c11[channel]
+            );
+        }
+        return result;
+    };
+        // 纹理采样
+        TGAColor diffuse_color = bilinear_sample(Model.get_texture_color(), uv);
+        
+        //TGAColor diffuse_color= Model.get_texture_color().get(uv.x * Model.get_texture_color().width(), uv.y * Model.get_texture_color().height());
         double spec_intensity = Model.get_texture_spec().get(uv.x * Model.get_texture_spec().width(), uv.y * Model.get_texture_spec().height())[0] / 255.0;
         TGAColor tex_normal = Model.get_texture_normal().get(uv.x * Model.get_texture_normal().width(), uv.y * Model.get_texture_normal().height());
         //把三个通道归一化到-1到1之间作为法线
@@ -150,6 +201,9 @@ void zbuffer_to_image(const std::vector<double>& zbuffer, TGAImage& image){
     image = zbuffer_img;
 }
 
+
+
+
 int main(){
     init_modeltransform(1.0, {0,0,0}, {0,0,0});// --- IGNORE ---
     lookat(eye, center, up);                                   // build the ModelView   matrix
@@ -180,24 +234,40 @@ int main(){
            for(int k=0;k<3;k++){
                clip[k] = p_shader.vertex(j,k);
            }
-           rasterize(clip,p_shader,framebuffer);
+           rasterize_msaa4x(clip,p_shader,framebuffer);
        }
    }
-
-    framebuffer.write_tga_file("output.tga");
+   
+    framebuffer.write_tga_file("output_msaa4x.tga");
+    std::vector<double> zbuffer1(zbuffer); //保存场景渲染的zbuffer
+    
+    // TGAImage zbuffer1_img(width, height, TGAImage::GRAYSCALE);
+    // zbuffer_to_image(zbuffer1,zbuffer1_img);
+    // zbuffer1_img.write_tga_file("zbuffer1.tga");
+    /*  以下为暴力计算AO的代码
+    由于每次都要重新渲染场景的阴影贴图，计算量巨大，运行时间较长
+    这里使用了500次采样，可以根据需要调整采样次数以平衡质量和性能
+    计算结果保存在final_mask_ao中
+    std::vector<double> final_mask_ao(width*height,0); //保存最终的AO遮罩
     mat<4,4> M= (Viewport*Perspective*ModelView).invert(); //从屏幕空间到光源空间的变换矩阵
+    constexpr int n=500;
+    std::mt19937 gen((std::random_device())());
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
 
-    std::vector<double> zbuffer1(zbuffer);
-    TGAImage zbuffer1_img(width, height, TGAImage::GRAYSCALE);
-    zbuffer_to_image(zbuffer1,zbuffer1_img);
-    zbuffer1_img.write_tga_file("zbuffer1.tga");
-    //注意要清空zbuffer
+    
+    for(int i=0;i<n;i++){ //多次采样计算阴影
+        std::cout<<i<<" "<<std::endl;
+     double y= dist(gen);
+     double theta = 2.0*M_PI*dist(gen);
+     double r= std::sqrt(1.0-y*y);
+     vec3 light_random =vec3{r*std::cos(theta),y,r*std::sin(theta)}*1.5; //在半径为1.5的球面上采样光源位置
+        //注意要清空zbuffer
     init_zbuffer(width, height);
     TGAImage trash ={height, width, TGAImage::RGB,{177, 195, 209, 255}};
-    lookat(light.xyz(), center, up);                                   // build the ModelView   matrix
-    init_perspective_simple(norm(eye-center));                        // build the Perspective matrix
-    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
-    init_shadowbuffer(width, height);
+    lookat(light_random, center, up);                                   // build the ModelView   matrix
+    //init_perspective_simple(norm(eye-center));                        // build the Perspective matrix
+    //init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
+    //init_shadowbuffer(width, height);
     //渲染阴影贴图
    for(int i=0;i<scene.models.size();i++){
        shadowShader shader(light, scene.models[i]);
@@ -209,33 +279,35 @@ int main(){
            rasterize(clip,shader,trash);
        }
    }
-   std::vector<double> zbuffer2(zbuffer); //保存阴影贴图的zbuffer
+    // TGAImage zbuffer2_img(width, height, TGAImage::GRAYSCALE);
+    // zbuffer_to_image(zbuffer,zbuffer2_img);
+    // zbuffer2_img.write_tga_file("zbuffer2_sample_"+std::to_string(i)+".tga");
    mat<4,4> N = Viewport*Perspective*ModelView; //阴影贴图的变换矩阵
-   //准备生成mask
-   std::vector<bool> shadow_mask(width * height, false);
+   
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
             vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.};
             vec4 q= N * fragment;
             vec3 shadow_coord = q.xyz()/q.w;
-            bool in_shadow =(fragment.z<-100||
-                            (shadow_coord.x<0||shadow_coord.x>=width||shadow_coord.y<0||shadow_coord.y>=height)||
-                            (shadow_coord.z> zbuffer2[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
-            shadow_mask[x + y * width] = in_shadow;
+            double lit =(fragment.z<-100||
+                            (shadow_coord.x>=0&&shadow_coord.x<width&&shadow_coord.y>=0&&shadow_coord.y<height&&
+                            (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)));
+            final_mask_ao[x + y * width] += (lit-final_mask_ao[x + y * width])/(i+1.0); //增量平均
         }
     }
-    TGAImage shadow_mask_img(width, height, TGAImage::GRAYSCALE);
+}
+
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-            if(shadow_mask[x + y * width]){
-                shadow_mask_img.set(x, y, {255,255,255,255});
-            } else {
-                shadow_mask_img.set(x, y, {0,0,0,255});
-            }
+            double m=smoothstep(-1,1.0,final_mask_ao[x + y * width]);
+            TGAColor c= framebuffer.get(x,y);
+            framebuffer.set(x,y,{static_cast<unsigned char>(c[0]*m),static_cast<unsigned char>(c[1]*m),static_cast<unsigned char>(c[2]*m),c[3]});
         }
     }
-    shadow_mask_img.write_tga_file("shadow_mask.tga");
-    //根据mask调整最终图像
+    
+    
+
+    //根据final_ssao调整最终图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
            if(shadow_mask[x+y*width]) continue;
@@ -248,9 +320,95 @@ int main(){
                 else continue;
         }
     }
-    framebuffer.write_tga_file("output_with_shadow.tga");
-    TGAImage zbuffer2_img(width, height, TGAImage::GRAYSCALE);
-    zbuffer_to_image(zbuffer2,zbuffer2_img);
-    zbuffer2_img.write_tga_file("zbuffer2.tga");
+    */
+    //阴影映射部分
+    std::vector<bool> shadow_mask(width*height,false); //保存阴影遮罩
+    mat<4,4> M= (Viewport*Perspective*ModelView).invert(); //从屏幕空间到光源空间的变换矩阵
+    lookat (light.xyz(), center, up);                                   // build the ModelView   matrix
+    mat<4,4> Light_Matrix= Viewport*Perspective*ModelView; 
+    //渲染阴影贴图
+    //注意要清空zbuffer
+    init_zbuffer(width, height);
+    TGAImage trash ={height, width, TGAImage::RGB,{177, 195, 209, 255}};
+   for(int i=0;i<scene.models.size();i++){
+       shadowShader shader(light, scene.models[i]);
+       for(int j=0;j<scene.models[i].nfaces();j++){
+           Triangle clip;
+           for(int k=0;k<3;k++){
+               clip[k] = shader.vertex(j,k);
+           }
+           rasterize(clip,shader,trash);
+       }
+   }
+    for(int x=0;x<width;x++){
+        for(int y=0;y<height;y++){
+            vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.};
+            vec4 q= Light_Matrix * fragment;
+            vec3 shadow_coord = q.xyz()/q.w;
+            bool in_shadow =(fragment.z<-100||
+                            (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
+                            (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
+            shadow_mask[x + y * width] = in_shadow; 
+        }
+    }
+    TGAImage shadow_mask_img(width, height, TGAImage::GRAYSCALE);
+    for(int x=0;x<width;x++){
+        for(int y=0;y<height;y++){
+            if(shadow_mask[x + y * width]){
+                shadow_mask_img.set(x, y, {0});
+            } else {
+                shadow_mask_img.set(x, y, {255});
+            }
+        }
+    }
+
+    for(int x=0;x<width;x++){
+        for(int y=0;y<height;y++){
+           if(shadow_mask[x+y*width]) continue;
+                TGAColor c = framebuffer.get(x, y); 
+                vec3 a = {double(c[0]), double(c[1]), double(c[2])};
+                if(norm(a)>80){
+                    a=normalized(a)*80;
+                    framebuffer.set(x, y, {static_cast<unsigned char>(a.x),static_cast<unsigned char>(a.y),static_cast<unsigned char>(a.z),255});
+                }
+                else continue;
+        }
+    }
+
+
+    //接下来实现ssao的部分
+    std::vector<double> final_mask_ssao(width*height,0); //保存最终的SSAO遮罩 
+    constexpr int m=120; //采样次数
+    const double radius=0.1; //采样半径
+    std::mt19937 gen_ssao((std::random_device())()); //随机数生成器
+    std::uniform_real_distribution<double> dist_ssao(-radius, radius); //均匀分布在[-radius, radius]之间
+
+    for(int x=0;x<width;x++){
+        for(int y=0;y<height;y++){
+            double z= zbuffer1[x + y * width];
+            if(z<-100) continue; //跳过背景
+            vec4 fragement= Viewport.invert() * vec4{double(x),double(y),z,1.};//屏幕空间到观察空间
+            double vote=0; //当前像素的投票值
+            double voters=0; //当前像素的投票数
+            for(int i=0;i<m;i++){
+                vec4 p= Viewport *vec4{fragement+vec4{dist_ssao(gen_ssao),dist_ssao(gen_ssao),dist_ssao(gen_ssao),0.0}}; //采样点转换到屏幕空间
+             if(p.x<0||p.x>=width||p.y<0||p.y>=height) continue; //跳过屏幕外采样点
+             double sampled_z= zbuffer1[int(p.x) + int(p.y)*width]; //采样点的深度值
+             if(sampled_z<-100) continue; //跳过背景采样点
+             if(z+5*radius<sampled_z)continue; //采样点深度过大，跳过
+                voters++; //有效投票数加一
+                vote+=sampled_z>p.z; //如果采样点被遮挡，投一票
+            }
+            double ssao =smoothstep(0, 1, 1 - vote/voters*.4); //计算当前像素的ssao值
+            TGAColor c= framebuffer.get(x,y);
+            framebuffer.set(x,y,{static_cast<unsigned char>(c[0]*ssao),static_cast<unsigned char>(c[1]*ssao),static_cast<unsigned char>(c[2]*ssao),c[3]}); //调整颜色
+        }
+    }
+
+
+    //framebuffer.write_tga_file("output_with_shadow_ssao120_binary.tga");
+    //TGAImage zbuffer2_img(width, height, TGAImage::GRAYSCALE);
+    //zbuffer_to_image(zbuffer2,zbuffer2_img);
+    //zbuffer2_img.write_tga_file("zbuffer2.tga");
     return 0;
 }

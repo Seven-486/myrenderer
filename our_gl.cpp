@@ -72,3 +72,7 @@ void rasterize(const Triangle &clip, const IShader &shader, TGAImage &framebuffe
         }
     }
 }
+
+void rasterize_msaa4x(const Triangle &clip, const IShader &shader, TGAImage &framebuffer) {
+    
+}
