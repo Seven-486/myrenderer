@@ -355,10 +355,13 @@ int main(){
             int pcf_radius=3;
             double bias =0.03;
 
-            if(fragment.z<-100){ //fragment是摄像机空间的片段位置
+            if(fragment.z<-100||
+              (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
+               (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
+               )
+                { 
                 shadow_intensity=1.0;
-                total_samples=1.0;
-            }
+                }
             else { 
                 for(int dx=-pcf_radius;dx<=pcf_radius;dx++){
                     for(int dy=-pcf_radius;dy<=pcf_radius;dy++){
@@ -396,7 +399,6 @@ int main(){
     //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-              if(shadow_mask[x+y*width]<0.05) continue; //非阴影区域跳过
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
                 double shadow_strength = 0.7; // 阴影浓度 0.0~1.0
