@@ -399,6 +399,7 @@ int main(){
     //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
+              if(shadow_mask[x+y*width]<0.01) continue; //跳过非阴影区域
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
                 double shadow_strength = 0.7; // 阴影浓度 0.0~1.0
