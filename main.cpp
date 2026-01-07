@@ -341,7 +341,7 @@ int main(){
             vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.};
             vec4 q= Light_Matrix * fragment;
             vec3 shadow_coord = q.xyz()/q.w;
-            bool in_shadow =(fragment.z<-100||
+            bool in_shadow =!(fragment.z<-100||
                             (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
                             (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
             shadow_mask[x + y * width] = in_shadow; 
@@ -360,7 +360,7 @@ int main(){
 
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-           if(shadow_mask[x+y*width]) continue;
+           if(!shadow_mask[x+y*width]) continue;
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])};
                 if(norm(a)>80){
