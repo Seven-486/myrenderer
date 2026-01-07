@@ -318,7 +318,7 @@ int main(){
     }
     */
     //阴影映射部分
-    std::vector<bool> shadow_mask(width*height,false); //保存阴影遮罩
+    std::vector<double> shadow_mask(width*height,0.0); //保存阴影遮罩
     mat<4,4> M= (Viewport*Perspective*ModelView).invert(); //从屏幕空间到光源空间的变换矩阵
     lookat (light.xyz(), center, up);                                   // build the ModelView   matrix
     mat<4,4> Light_Matrix= Viewport*Perspective*ModelView; 
@@ -326,6 +326,7 @@ int main(){
     //注意要清空zbuffer
     init_zbuffer(width, height);
     TGAImage trash ={height, width, TGAImage::RGB,{177, 195, 209, 255}};
+    
    for(int i=0;i<scene.models.size();i++){
        shadowShader shader(light, scene.models[i]);
        for(int j=0;j<scene.models[i].nfaces();j++){
@@ -336,38 +337,86 @@ int main(){
            rasterize(clip,shader,trash);
        }
    }
+   TGAImage zbuffer_shadow_img(width, height, TGAImage::GRAYSCALE);
+   zbuffer_to_image(zbuffer,zbuffer_shadow_img);
+   zbuffer_shadow_img.write_tga_file("shadow_zbuffer_pcf.tga");
+   TGAImage shadow_mask_img_raw(width, height, TGAImage::GRAYSCALE);
+   zbuffer_to_image(zbuffer1,shadow_mask_img_raw);
+    shadow_mask_img_raw.write_tga_file("shadow_zbuffer_pcf2.tga");
+
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-            vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.};
-            vec4 q= Light_Matrix * fragment;
-            vec3 shadow_coord = q.xyz()/q.w;
-            bool in_shadow =!(fragment.z<-100||
-                            (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
-                            (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
-            shadow_mask[x + y * width] = in_shadow; 
-        }
+            vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.}; //从场景渲染的zbuffer恢复片段位置
+            vec4 q= Light_Matrix * fragment; //变换到光源裁剪空间
+            vec3 shadow_coord = q.xyz()/q.w; //齐次除法得到光源屏幕空间坐标
+            
+            double shadow_intensity =0.0;
+            double total_samples=1.0;
+            int pcf_radius=3;
+            double bias =0.03;
+
+            if(fragment.z<-100||
+              (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
+               (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
+               )
+                { 
+                shadow_intensity=1.0;
+                }
+            else { 
+                for(int dx=-pcf_radius;dx<=pcf_radius;dx++){
+                    for(int dy=-pcf_radius;dy<=pcf_radius;dy++){
+                        int nx=int(shadow_coord.x)+dx; 
+                        int ny=int(shadow_coord.y)+dy;
+                        if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                             double map_z = zbuffer[nx+ny*width];
+                             
+                             if(shadow_coord.z > (map_z -bias)) {
+                                 shadow_intensity += 1.0;
+                             }
+                        }
+                        total_samples+=1.0;  
+                    }
+                }
+            }
+
+            // bool in_shadow =(fragment.z<-100||
+            //                 (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
+            //                 (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
+            // shadow_mask[x + y * width] += in_shadow; 
+            
+            shadow_mask[x + y * width] =1.0-shadow_intensity/total_samples; 
+        }     
     }
     TGAImage shadow_mask_img(width, height, TGAImage::GRAYSCALE);
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-            if(shadow_mask[x + y * width]){
-                shadow_mask_img.set(x, y, {0});
-            } else {
-                shadow_mask_img.set(x, y, {255});
-            }
+            //线性归一化
+            double gray = (255 * (1.0-shadow_mask[x + y * width]));//
+            shadow_mask_img.set(x, y, {static_cast<unsigned char>(gray)});//
         }
     }
-
+    shadow_mask_img.write_tga_file("shadow_pcf_mask.tga");
+    //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-           if(!shadow_mask[x+y*width]) continue;
                 TGAColor c = framebuffer.get(x, y); 
-                vec3 a = {double(c[0]), double(c[1]), double(c[2])};
-                if(norm(a)>80){
-                    a=normalized(a)*80;
-                    framebuffer.set(x, y, {static_cast<unsigned char>(a.x),static_cast<unsigned char>(a.y),static_cast<unsigned char>(a.z),255});
-                }
-                else continue;
+                vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
+                double shadow_strength = 0.7; // 阴影浓度 0.0~1.0
+                double shadow_factor = 1.0-shadow_mask[x + y * width] * shadow_strength; 
+                a = a * shadow_factor;
+                framebuffer.set(x, y, {
+                    static_cast<unsigned char>(std::min(255.0, a.x)),
+                    static_cast<unsigned char>(std::min(255.0, a.y)),
+                    static_cast<unsigned char>(std::min(255.0, a.z)),
+                    255
+                });
+            
+            
+                // if(norm(a)>80){ //限制最大亮度
+                //     a=normalized(a)*80; //这是为了防止过曝
+                //     framebuffer.set(x, y, {static_cast<unsigned char>(a.x),static_cast<unsigned char>(a.y),static_cast<unsigned char>(a.z),255});
+                // }
+                // else continue;
         }
     }
 
@@ -402,7 +451,7 @@ int main(){
     }
 
 
-    //framebuffer.write_tga_file("output_with_shadow_ssao120_binary.tga");
+    framebuffer.write_tga_file("output_with_pcfshadow_ssao120_binary.tga");
     //TGAImage zbuffer2_img(width, height, TGAImage::GRAYSCALE);
     //zbuffer_to_image(zbuffer2,zbuffer2_img);
     //zbuffer2_img.write_tga_file("zbuffer2.tga");
