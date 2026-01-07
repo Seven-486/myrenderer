@@ -400,18 +400,16 @@ int main(){
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
                 double shadow_strength = 0.7; // 阴影浓度 0.0~1.0
-                double shadow_factor = shadow_mask[x + y * width] * shadow_strength; 
+                double shadow_factor = 1.0-shadow_mask[x + y * width] * shadow_strength; 
                 a = a * shadow_factor;
-                if(norm(a)>80){
-                    a=normalized(a)*80;
-                    framebuffer.set(x, y, {
+                framebuffer.set(x, y, {
                     static_cast<unsigned char>(std::min(255.0, a.x)),
                     static_cast<unsigned char>(std::min(255.0, a.y)),
                     static_cast<unsigned char>(std::min(255.0, a.z)),
                     255
                 });
-            }
-            else continue;
+            
+            
                 // if(norm(a)>80){ //限制最大亮度
                 //     a=normalized(a)*80; //这是为了防止过曝
                 //     framebuffer.set(x, y, {static_cast<unsigned char>(a.x),static_cast<unsigned char>(a.y),static_cast<unsigned char>(a.z),255});
