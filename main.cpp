@@ -370,7 +370,7 @@ int main(){
                         if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
                              double map_z = zbuffer[nx+ny*width];
                              
-                             if(shadow_coord.z > (map_z - bias)) {
+                             if(shadow_coord.z > (map_z -bias)) {
                                  shadow_intensity += 1.0;
                              }
                         }
