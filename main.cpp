@@ -320,7 +320,7 @@ int main(){
     //阴影映射部分
     std::vector<double> shadow_mask(width*height,0.0); //保存阴影遮罩
     mat<4,4> M= (Viewport*Perspective*ModelView).invert(); //从屏幕空间到光源空间的变换矩阵
-    lookat (light.xyz(), center, up);                                   // build the ModelView   matrix
+    lookat (light.xyz(), center, up);                       // build the ModelView   matrix
     mat<4,4> Light_Matrix= Viewport*Perspective*ModelView; 
     //渲染阴影贴图
     //注意要清空zbuffer
@@ -351,30 +351,34 @@ int main(){
             vec3 shadow_coord = q.xyz()/q.w; //齐次除法得到光源屏幕空间坐标
             
             double shadow_intensity =0.0;
-            double total_samples=1.0;
+            double total_samples=0.0;
             int pcf_radius=3;
             double bias =0.03;
 
-            if(fragment.z<-100||
-              (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
-               (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
+            if(fragment.z<-100||//background
+               (shadow_coord.x<0 || shadow_coord.x>=width| shadow_coord.y<0 || shadow_coord.y>=height)   //out of light's view
+               //||(shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
                )
                 { 
                 shadow_intensity=1.0;
+                total_samples=1.0;
                 }
             else { 
                 for(int dx=-pcf_radius;dx<=pcf_radius;dx++){
                     for(int dy=-pcf_radius;dy<=pcf_radius;dy++){
+                        total_samples+=1.0;  
                         int nx=int(shadow_coord.x)+dx; 
                         int ny=int(shadow_coord.y)+dy;
                         if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
                              double map_z = zbuffer[nx+ny*width];
-                             
-                             if(shadow_coord.z > (map_z -bias)) {
+                             if(shadow_coord.z > (map_z -bias)) { //visible
                                  shadow_intensity += 1.0;
                              }
                         }
-                        total_samples+=1.0;  
+                        else {
+                            shadow_intensity += 1.0; //out of light's view treated as lit
+                        }
+                        
                     }
                 }
             }
@@ -399,7 +403,7 @@ int main(){
     //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-              if(shadow_mask[x+y*width]<0.01) continue; //跳过非阴影区域
+               if(abs(shadow_mask[x+y*width])< 0.0001) continue; //跳过非阴影区域 
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
                 double shadow_strength = 0.7; // 阴影浓度 0.0~1.0
