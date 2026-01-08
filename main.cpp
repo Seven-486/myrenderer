@@ -200,6 +200,9 @@ void zbuffer_to_image(const std::vector<double>& zbuffer, TGAImage& image){
     }
     image = zbuffer_img;
 }
+void poissonDiskSamples(const vec2& randomseed,std::vector<vec2>& samples){
+    return ;
+}
 
 
 
@@ -352,12 +355,12 @@ int main(){
             
             double shadow_intensity =0.0;
             double total_samples=1.0;
-            int pcf_radius=3;
+            int pcf_radius=10;
             double bias =0.03;
 
-            if(fragment.z<-100||
-              (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
-               (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
+            if(fragment.z<-100 //背景
+             ||(shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width)  // 超出边界
+             //|| (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03) //可见性
                )
                 { 
                 shadow_intensity=1.0;
