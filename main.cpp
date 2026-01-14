@@ -4,7 +4,7 @@
 #include<random>
 #include<cmath>
 
-
+// 平滑插值函数
 double smoothstep(double edge0, double edge1, double x) {
     double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0); //作用是将值限制在0到1之间
     return t * t * (3.0 - 2.0 * t); // 插值计算
@@ -200,8 +200,12 @@ void zbuffer_to_image(const std::vector<double>& zbuffer, TGAImage& image){
     }
     image = zbuffer_img;
 }
-void poissonDiskSamples(const vec2& randomseed,std::vector<vec2>& samples){
-    return ;
+
+//线性化深度值为 0-1 范围
+double getLinearizeDepth(double projCoords){ //从 0-width，0-height 范围的深度值转换为线性深度
+    double z_ndc = projCoords; //假设传入的projCoords已经是ndc空间的z值
+     double f = norm(eye - center); // 对应 init_perspective_simple 的参数
+    return z_ndc / (1.0 + z_ndc / f);
 }
 
 
@@ -342,25 +346,26 @@ int main(){
    }
    TGAImage zbuffer_shadow_img(width, height, TGAImage::GRAYSCALE);
    zbuffer_to_image(zbuffer,zbuffer_shadow_img);
-   zbuffer_shadow_img.write_tga_file("shadow_zbuffer_pcf.tga");
+   zbuffer_shadow_img.write_tga_file("shadow_zbuffer_pcss.tga");
    TGAImage shadow_mask_img_raw(width, height, TGAImage::GRAYSCALE);
    zbuffer_to_image(zbuffer1,shadow_mask_img_raw);
-    shadow_mask_img_raw.write_tga_file("shadow_zbuffer_pcf2.tga");
+    shadow_mask_img_raw.write_tga_file("shadow_zbuffer2_pcss.tga");
 
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
             vec4 fragment =M*vec4{double(x),double(y),zbuffer1[x + y * width],1.}; //从场景渲染的zbuffer恢复片段位置
             vec4 q= Light_Matrix * fragment; //变换到光源裁剪空间
-            vec3 shadow_coord = q.xyz()/q.w; //齐次除法得到光源屏幕空间坐标
+            vec3 shadow_coord = q.xyz()/q.w; //齐次除法得到光源屏幕空间坐标，范围是0-width,0-height
+           
             
             double shadow_intensity =0.0;
             double total_samples=0.0;
-            int pcf_radius=3;
+            double pcf_radius=2.0; //pcf采样半径
             double bias =0.03;
+            //开始实现 pcss
 
             if(fragment.z<-100||//background
-               (shadow_coord.x<0 || shadow_coord.x>=width| shadow_coord.y<0 || shadow_coord.y>=height)   //out of light's view
-               //||(shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03)
+               (shadow_coord.x<0 || shadow_coord.x>width|| shadow_coord.y<0 || shadow_coord.y>height)   //out of light's view
                )
                 { 
                 shadow_intensity=1.0;
@@ -402,7 +407,7 @@ int main(){
             shadow_mask_img.set(x, y, {static_cast<unsigned char>(gray)});//
         }
     }
-    shadow_mask_img.write_tga_file("shadow_pcf_mask.tga");
+    //shadow_mask_img.write_tga_file("shadow_pcf_mask.tga");
     //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
@@ -435,12 +440,12 @@ int main(){
     const double radius=0.1; //采样半径
     std::mt19937 gen_ssao((std::random_device())()); //随机数生成器
     std::uniform_real_distribution<double> dist_ssao(-radius, radius); //均匀分布在[-radius, radius]之间
-
+    mat<4,4> Viewport_Inv = Viewport.invert();
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
             double z= zbuffer1[x + y * width];
             if(z<-100) continue; //跳过背景
-            vec4 fragement= Viewport.invert() * vec4{double(x),double(y),z,1.};//屏幕空间到观察空间
+            vec4 fragement= Viewport_Inv * vec4{double(x),double(y),z,1.};//屏幕空间到观察空间
             double vote=0; //当前像素的投票值
             double voters=0; //当前像素的投票数
             for(int i=0;i<m;i++){

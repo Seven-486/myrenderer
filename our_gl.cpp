@@ -30,7 +30,7 @@ void lookat(const vec3 eye, const vec3 center, const vec3 up) {
                 mat<4,4>{{{1,0,0,-center.x}, {0,1,0,-center.y}, {0,0,1,-center.z}, {0,0,0,1}}}; //moderview矩阵是mvp变换的view部分
 }
 
-void init_perspective_simple(const double f) {
+void init_perspective_simple(const double f) { //简单透视投影矩阵,原理是将z值线性映射到[-1,1]
     Perspective = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0, -1/f,1}}};
 }
 
