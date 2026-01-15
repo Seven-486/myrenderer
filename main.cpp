@@ -4,11 +4,7 @@
 #include<random>
 #include<cmath>
 
-// 平滑插值函数
-double smoothstep(double edge0, double edge1, double x) {
-    double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0); //作用是将值限制在0到1之间
-    return t * t * (3.0 - 2.0 * t); // 插值计算
-}
+
 
 extern mat<4,4> Viewport,ModelView, Perspective,Modeltransform; // "OpenGL" state matrices and
 extern std::vector<double> zbuffer;     // the depth buffer
@@ -19,7 +15,7 @@ constexpr int height = 800;
 constexpr vec3    eye{-1, 0, 2}; // camera position
 constexpr vec3 center{ 0, 0, 0}; // camera direction
 constexpr vec3     up{ 0, 1, 0}; // camera up vector
-constexpr vec4 light{ 1, 1, 1, 0}; // light direction
+constexpr vec4 light{ 1, 1, 1, 0}; // light direction 
 
 
 
@@ -200,6 +196,11 @@ void zbuffer_to_image(const std::vector<double>& zbuffer, TGAImage& image){
     }
     image = zbuffer_img;
 }
+// 平滑插值函数
+double smoothstep(double edge0, double edge1, double x) {
+    double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0); //作用是将值限制在0到1之间
+    return t * t * (3.0 - 2.0 * t); // 插值计算
+}
 
 //线性化深度值为 0-1 范围
 double getLinearizeDepth(double projCoords){ //从 0-width，0-height 范围的深度值转换为线性深度
@@ -212,21 +213,23 @@ double getLinearizeDepth(double projCoords){ //从 0-width，0-height 范围的�
 
 
 int main(){
-    init_modeltransform(1.0, {0,0,0}, {0,0,0});// --- IGNORE ---
     lookat(eye, center, up);                                   // build the ModelView   matrix
     init_perspective_simple(norm(eye-center));                        // build the Perspective matrix
     init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
     init_zbuffer(width, height);
     TGAImage framebuffer(width, height, TGAImage::RGB,{177, 195, 209, 255});
     Scene scene(800,800);
+
     model Model1("../obj/diablo3_pose/diablo3_pose.obj");
     Model1.read_normalmap("../obj/diablo3_pose/diablo3_pose_nm_tangent.tga");
     Model1.read_texture("../obj/diablo3_pose/diablo3_pose_diffuse.tga");
     Model1.read_specmap("../obj/diablo3_pose/diablo3_pose_spec.tga");
+
     model Model2("../obj/floor.obj");
     Model2.read_normalmap("../obj/floor_nm_tangent.tga");
     Model2.read_texture("../obj/floor_diffuse.tga");
     Model2.read_specmap("../obj/floor_spec.tga");
+    
     scene.add_model(Model1);
     scene.add_model(Model2);
     //渲染场景
@@ -240,9 +243,8 @@ int main(){
            rasterize(clip,p_shader,framebuffer);
        }
    }
-   
-    framebuffer.write_tga_file("output_msaa4x.tga");
-    std::vector<double> zbuffer1(zbuffer); //保存场景渲染的zbuffer
+    framebuffer.write_tga_file("output_scene.tga");
+    std::vector<double> zbuffer1(zbuffer); 
     
     // TGAImage zbuffer1_img(width, height, TGAImage::GRAYSCALE);
     // zbuffer_to_image(zbuffer1,zbuffer1_img);
@@ -327,7 +329,7 @@ int main(){
     //阴影映射部分
     std::vector<double> shadow_mask(width*height,0.0); //保存阴影遮罩
     mat<4,4> M= (Viewport*Perspective*ModelView).invert(); //从屏幕空间到光源空间的变换矩阵
-    lookat (light.xyz(), center, up);                       // build the ModelView   matrix
+    lookat (light.xyz(), center, up);                      //建立光源视图矩阵
     mat<4,4> Light_Matrix= Viewport*Perspective*ModelView; 
     //渲染阴影贴图
     //注意要清空zbuffer
@@ -344,12 +346,13 @@ int main(){
            rasterize(clip,shader,trash);
        }
    }
+
    TGAImage zbuffer_shadow_img(width, height, TGAImage::GRAYSCALE);
    zbuffer_to_image(zbuffer,zbuffer_shadow_img);
-   zbuffer_shadow_img.write_tga_file("shadow_zbuffer_pcss.tga");
+   zbuffer_shadow_img.write_tga_file("shadow_zbuffer_pcf.tga");
    TGAImage shadow_mask_img_raw(width, height, TGAImage::GRAYSCALE);
    zbuffer_to_image(zbuffer1,shadow_mask_img_raw);
-    shadow_mask_img_raw.write_tga_file("shadow_zbuffer2_pcss.tga");
+    shadow_mask_img_raw.write_tga_file("shadow_zbuffer2_pcf.tga");
 
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
@@ -362,16 +365,16 @@ int main(){
             double total_samples=0.0;
             double pcf_radius=2.0; //pcf采样半径
             double bias =0.03;
-            //开始实现 pcss
+            
 
-            if(fragment.z<-100||//background
-               (shadow_coord.x<0 || shadow_coord.x>width|| shadow_coord.y<0 || shadow_coord.y>height)   //out of light's view
+            if(fragment.z<-100||//背景
+               (shadow_coord.x<0 || shadow_coord.x>width|| shadow_coord.y<0 || shadow_coord.y>height)   //超出光源视野
                )
                 { 
                 shadow_intensity=1.0;
                 total_samples=1.0;
                 }
-            else { 
+            else {  //在光源视野内，进行pcf采样
                 for(int dx=-pcf_radius;dx<=pcf_radius;dx++){
                     for(int dy=-pcf_radius;dy<=pcf_radius;dy++){
                         total_samples+=1.0;  
@@ -379,39 +382,40 @@ int main(){
                         int ny=int(shadow_coord.y)+dy;
                         if(nx >= 0 && nx < width && ny >= 0 && ny < height) {
                              double map_z = zbuffer[nx+ny*width];
-                             if(shadow_coord.z > (map_z -bias)) { //visible
+                             if(shadow_coord.z > (map_z -bias)) { //在阴影中
                                  shadow_intensity += 1.0;
                              }
                         }
                         else {
-                            shadow_intensity += 1.0; //out of light's view treated as lit
+                            shadow_intensity += 1.0; //超出边界的采样点视为在阴影中
                         }
                         
                     }
                 }
             }
-
+            //硬阴影版本
             // bool in_shadow =(fragment.z<-100||
             //                 (shadow_coord.x<0 || shadow_coord.x>=width|| shadow_coord.y<0 || shadow_coord.y>=width) || 
             //                 (shadow_coord.z> zbuffer[int(shadow_coord.x) + int(shadow_coord.y) * width]-.03));
             // shadow_mask[x + y * width] += in_shadow; 
             
-            shadow_mask[x + y * width] =1.0-shadow_intensity/total_samples; 
+            shadow_mask[x + y * width] =1.0-shadow_intensity/total_samples; //pcf阴影版本，0-1范围，表示阴影强度
         }     
     }
-    TGAImage shadow_mask_img(width, height, TGAImage::GRAYSCALE);
+
+    TGAImage shadow_mask_img(width, height, TGAImage::GRAYSCALE); //保存阴影遮罩图像以便调试
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-            //线性归一化
-            double gray = (255 * (1.0-shadow_mask[x + y * width]));//
-            shadow_mask_img.set(x, y, {static_cast<unsigned char>(gray)});//
+            double gray = (255 * (1.0-shadow_mask[x + y * width]));
+            shadow_mask_img.set(x, y, {static_cast<unsigned char>(gray)});
         }
     }
     //shadow_mask_img.write_tga_file("shadow_pcf_mask.tga");
+
     //根据shadow_mask调整图像
     for(int x=0;x<width;x++){
         for(int y=0;y<height;y++){
-               if(abs(shadow_mask[x+y*width])< 0.0001) continue; //跳过非阴影区域 
+               if(abs(shadow_mask[x+y*width])< 0.00001) continue; //跳过非阴影区域 
                 TGAColor c = framebuffer.get(x, y); 
                 vec3 a = {double(c[0]), double(c[1]), double(c[2])}; //原颜色
                 double shadow_strength = 0.7; // 阴影浓度 0.0~1.0

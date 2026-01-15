@@ -93,7 +93,7 @@ template<int nrows,int ncols> struct mat {
     const vec<ncols>& operator[] (const int idx) const { assert(idx>=0 && idx<nrows); return rows[idx]; }
 
     double det() const {
-        return dt<ncols>::det(*this);
+        return dt<ncols>::det(*this); 
     }
 
     double cofactor(const int row, const int col) const {
